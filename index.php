@@ -149,7 +149,7 @@ if ( get_value( 'view' ) ) {
 		$where[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
 	}
 	if ( $from ) {
-		$op = $dir === 'prev' ? '>' : '=<';
+		$op = $dir === 'prev' ? '>' : '<=';
 		$where[] = sprintf( "id $op '%d'", $from );
 	}
 	if ( $where ) {
@@ -189,12 +189,13 @@ if ( get_value( 'view' ) ) {
 
 		$links = [];
 
-		$data = compact( 'view', 'wiki', 'status', 'order', 'limit' );
+		$data = compact( 'wiki', 'status', 'order', 'limit' );
+		$data['view'] = 1;
 		if ( $from ) {
 			$query = $data;
 			$query['from'] = $first ? $first->id : '';
 			$query['dir'] = 'prev';
-			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?'
+			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?';
 			$link .= http_build_query( $query ) . '">&larr; prev</a>';
 			$links[] = $link;
 		}
@@ -203,7 +204,7 @@ if ( get_value( 'view' ) ) {
 		if ( $next || $dir === 'prev' ) {
 			$query = $data;
 			$query['from'] = $next ? $next->id : ( $last ? ( $last->id + 1 ) : '' );
-			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?'
+			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?';
 			$link .= http_build_query( $query ) . '">next &rarr;</a>';
 			$links[] = $link;
 		}
