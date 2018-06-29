@@ -12,8 +12,24 @@ function getDB() {
 	return $db;
 }
 
+$cache = [];
+
+function formatPage( $wiki, $page, $db ) {
+	global $cache;
+	// TODO
+	return htmlspecialchars( $page );
+}
+
+function formatUser( $user ) {
+	return "<a href=\"//www.wikidata.org/wiki/User:$user\">$user</a>"; // todo: escape
+}
+
+function formatItem( $item ) {
+	return "<a href=\"//www.wikidata.org/wiki/$item\">$item</a>";
+}
+
 $wiki = get_value( 'wiki' );
-$key = get_value( 'key', 'id' );
+$key = 'id'; //get_value( 'key', 'id' );
 $order = get_value( 'desc' ) ? 'DESC' : 'ASC';
 $limit = get_value( 'limit', 50 );
 
@@ -73,8 +89,9 @@ if ( get_value( 'view' ) ) {
 	$result = mysql_query( $query, $db );
 	if ( $result ) {
 
+		echo "<br><br>\n";
 		echo "<table id='main_table'>\n";
-		echo "<tr><th>Wiki</th><th>Page</th><th>Status</th><th>Update</th><th>User</th></tr>\n";
+		echo "<tr><th>Wiki</th><th>Item</th><th>Page</th><th>Status</th><th>Update</th><th>User</th></tr>\n";
 
 		for ( $i = 0; $i < $limit; ++$i ) {
 			$row = mysql_fetch_object( $result );
@@ -83,10 +100,11 @@ if ( get_value( 'view' ) ) {
 			}
 			echo "<tr>";
 			echo "<td>{$row->wiki}</td>";
-			echo "<td>{$row->page}</td>";
+			echo "<td>{formatItem( $row->item )}</td>";
+			echo "<td>{formatPage( $row->wiki, $row->page, $db )}</td>";
 			echo "<td>{$row->status}</td>";
 			echo "<td>{$row->stamp}</td>";
-			echo "<td>{$row->author}</td>";
+			echo "<td>{formatUser( $row->author )}</td>";
 			echo "</tr>\n";
 		}
 
