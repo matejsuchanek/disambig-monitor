@@ -98,11 +98,11 @@ class ReportingBot(WikidataBot):
         if data:
             page_eq = data['page'] == page.title(withNamespace=True)
             status_eq = data['status'] == status
-            if not page_eq or not status_eq:
-                with self.db.cursor() as cur:
-                    ok += cur.execute(
-                        'DELETE FROM disambiguations WHERE id = %s',
-                        (data['id'],))
+            if page_eq and status_eq:
+                return
+            with self.db.cursor() as cur:
+                ok += cur.execute('DELETE FROM disambiguations WHERE id = %s',
+                                  (data['id'],))
 
         if status != 'FALSE':
             new = [item.getID(), page.site.dbName(),

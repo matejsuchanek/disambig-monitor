@@ -46,7 +46,7 @@ function formatItem( $item ) {
 }
 
 $wiki = get_value( 'wiki' );
-$key = 'id'; //get_value( 'key', 'id' );
+$field = 'id'; //get_value( 'field', 'id' );
 $status = get_value( 'status', [] );
 $order = get_value( 'order', 'ASC' ) === 'DESC' ? 'DESC' : 'ASC';
 $limit = get_value( 'limit', 50 );
@@ -87,11 +87,10 @@ $status_map = [
 ];
 
 foreach ( $status_map as $key => $value ) {
-	
-	echo "<label for=\"$key\">$value</label>&nbsp;"
+
 	echo "<input type=\"checkbox\" name=\"status[]\" id=\"$key\" value=\"$key\"";
-	echo ( !$status || in_array( $key, $status ) ) ? ' checked="checked"' : '';
-	echo ">&nbsp;\n";
+	echo in_array( $key, $status ) ? ' checked="checked"' : '';
+	echo ">&nbsp;<label for=\"$key\">$value</label>&nbsp;\n";
 
 }
 
@@ -108,10 +107,9 @@ $order_map = [
 
 foreach ( $order_map as $key => $value ) {
 
-	echo "<label for=\"$key\">$value</label>&nbsp;";
 	echo "<input type=\"radio\" name=\"order\" id=\"$key\" value=\"$key\"";
 	echo $key === $order ? ' checked="checked"' : '';
-	echo ">&nbsp;\n";
+	echo ">&nbsp;<label for=\"$key\">$value</label>&nbsp;\n";
 
 }
 
@@ -145,13 +143,13 @@ if ( get_value( 'view' ) ) {
 	if ( $status ) {
 		$callback = function ( $value ) use ( $db ) {
 			return '"' . mysql_real_escape_string( $value, $db ) . '"';
-		}
+		};
 		$conds[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
 	}
 	if ( $conds ) {
-		$query .= ' WHERE ' . implode( 'AND', $conds );
+		$query .= ' WHERE ' . implode( ' AND ', $conds );
 	}
-	$query .= " ORDER BY $key $order";
+	$query .= " ORDER BY $field $order";
 	$query .= sprintf( ' LIMIT %d', $limit + 1 );
 
 	$result = mysql_query( $query, $db );
