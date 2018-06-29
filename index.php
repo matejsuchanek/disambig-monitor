@@ -30,7 +30,7 @@ $limit = get_value( 'limit', 50 );
 
 <body>
 
-<p>Use the following form to ...</p>
+<p>Use the following form to get a list of problematic links to Wikidata disambiguation items.</p>
 
 <form action="index.php" method="get">
 
@@ -49,7 +49,7 @@ $limit = get_value( 'limit', 50 );
     <option value="500">
 </datalist>
 
-<p><button name="submit" type="submit" value="Get disambiguation items" /></p>
+<input type="submit" value="Get disambiguation items">
 
 </form>
 
