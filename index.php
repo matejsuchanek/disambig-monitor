@@ -1,27 +1,44 @@
 <?php
 
+header( 'Content-Type: text/html; charset=utf-8' );
+ini_set( 'default_charset', 'utf-8' );
+//ini_set( 'display_errors', 1 );
+//error_reporting( E_ALL );
+
 function get_value( $value, $fallback = '' ) {
 	return isset( $_GET[$value] ) ? $_GET[$value] : $fallback;
 }
 
-function getDB() {
+function getDBs() {
 	$ts_pw = posix_getpwuid( posix_getuid() );
 	$ts_mycnf = parse_ini_file( $ts_pw['dir'] . '/replica.my.cnf' );
 	$db = mysql_connect( 'tools.db.svc.eqiad.wmflabs', $ts_mycnf['user'], $ts_mycnf['password'] );
+	$wd = mysql_connect( 'wikidatawiki.analytics.db.svc.eqiad.wmflabs', $ts_mycnf['user'], $ts_mycnf['password'] );
 	mysql_select_db( $ts_mycnf['user'] . '__data', $db );
-	return $db;
+	mysql_select_db( 'wikidatawiki_p', $wd );
+	mysql_set_charset( 'utf8', $db );
+	return [ $db, $wd ];
 }
 
 $cache = [];
 
 function formatPage( $wiki, $page, $db ) {
 	global $cache;
-	// TODO
-	return htmlspecialchars( $page );
+	if ( !isset( $cache[$wiki] ) ) {
+		$query = "SELECT site_data FROM sites WHERE site_global_key = '$wiki'";
+		$result = mysql_query( $query, $db );
+		$row = mysql_fetch_object( $result );
+		$data = unserialize( $row->site_data );
+		$cache[$wiki] = $data['page_path'];
+	}
+	$url = str_replace( '$1', urlencode( $page ), $cache[$wiki] );
+	return "<a href=\"$url\">" . htmlspecialchars( $page, ENT_NOQUOTES, 'UTF-8' ) . '</a>';
 }
 
 function formatUser( $user ) {
-	return "<a href=\"//www.wikidata.org/wiki/User:$user\">$user</a>"; // todo: escape
+	$url_user = urlencode( $user );
+	$text_user = htmlspecialchars( $user, ENT_NOQUOTES, 'UTF-8' );
+	return "<a href=\"//www.wikidata.org/wiki/User:$url_user\">$text_user</a>";
 }
 
 function formatItem( $item ) {
@@ -41,6 +58,8 @@ $limit = get_value( 'limit', 50 );
 <head>
 
 <title>Disambiguations monitor</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 </head>
 
@@ -73,7 +92,7 @@ $limit = get_value( 'limit', 50 );
 
 if ( get_value( 'view' ) ) {
 
-	$db = getDB();
+	list( $db, $wd ) = getDBs();
 
 	$query = 'SELECT * FROM disambiguations';
 	$conds = [];
@@ -99,12 +118,12 @@ if ( get_value( 'view' ) ) {
 				break;
 			}
 			echo "<tr>";
-			echo "<td>{$row->wiki}</td>";
-			echo "<td>{formatItem( $row->item )}</td>";
-			echo "<td>{formatPage( $row->wiki, $row->page, $db )}</td>";
-			echo "<td>{$row->status}</td>";
-			echo "<td>{$row->stamp}</td>";
-			echo "<td>{formatUser( $row->author )}</td>";
+			echo '<td>' . $row->wiki. '</td>';
+			echo '<td>' . formatItem( $row->item ) . '</td>';
+			echo '<td>' . formatPage( $row->wiki, $row->page, $wd ) . '</td>';
+			echo '<td>' . $row->status . '</td>';
+			echo '<td>' . $row->stamp . '</td>';
+			echo '<td>' . formatUser( $row->author ) . '</td>';
 			echo "</tr>\n";
 		}
 
