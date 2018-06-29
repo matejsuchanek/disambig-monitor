@@ -1,7 +1,7 @@
 CREATE TABLE disambiguations (
 	id int NOT NULL AUTO_INCREMENT,
 	item char(10) NOT NULL,
-	wiki char(13) NOT NULL,
+	wiki char(32) NOT NULL,
 	page varchar(255) NOT NULL,
 	stamp timestamp NOT NULL,
 	status ENUM('READY', 'DELETED', 'REDIRECT', 'FALSE') NOT NULL,

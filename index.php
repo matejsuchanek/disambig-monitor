@@ -48,7 +48,9 @@ function formatItem( $item ) {
 $wiki = get_value( 'wiki' );
 $field = 'id'; //get_value( 'field', 'id' );
 $status = get_value( 'status', [] );
-$order = get_value( 'order', 'ASC' ) === 'DESC' ? 'DESC' : 'ASC';
+$from = get_value( 'from' );
+$dir = get_value( 'dir' ) === 'prev' ? 'prev' : '';
+$order = get_value( 'order' ) === 'DESC' ? 'DESC' : 'ASC';
 $limit = get_value( 'limit', 50 );
 
 ?>
@@ -136,18 +138,22 @@ if ( get_value( 'view' ) ) {
 	list( $db, $wd ) = getDBs();
 
 	$query = 'SELECT * FROM disambiguations';
-	$conds = [];
+	$where = [];
 	if ( $wiki ) {
-		$conds[] = sprintf( "wiki = '%s'", mysql_real_escape_string( $wiki, $db ) );
+		$where[] = sprintf( "wiki = '%s'", mysql_real_escape_string( $wiki, $db ) );
 	}
 	if ( $status ) {
 		$callback = function ( $value ) use ( $db ) {
 			return '"' . mysql_real_escape_string( $value, $db ) . '"';
 		};
-		$conds[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
+		$where[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
 	}
-	if ( $conds ) {
-		$query .= ' WHERE ' . implode( ' AND ', $conds );
+	if ( $from ) {
+		$op = $dir === 'prev' ? '>' : '=<';
+		$where[] = sprintf( "id $op '%d'", $from );
+	}
+	if ( $where ) {
+		$query .= ' WHERE ' . implode( ' AND ', $where );
 	}
 	$query .= " ORDER BY $field $order";
 	$query .= sprintf( ' LIMIT %d', $limit + 1 );
@@ -156,30 +162,57 @@ if ( get_value( 'view' ) ) {
 	if ( $result ) {
 
 		echo "<br><br>\n";
-		echo "<table id='main_table'>\n";
-		echo "<tr><th>Wiki</th><th>Item</th><th>Page</th><th>Status</th><th>Update</th><th>User</th></tr>\n";
+
+		$table  = "<table id='main_table'>\n";
+		$table .= "<tr><th>Wiki</th><th>Item</th><th>Page</th><th>Status</th><th>Update</th><th>User</th></tr>\n";
+
+		$first = $last = null;
 
 		for ( $i = 0; $i < $limit; ++$i ) {
 			$row = mysql_fetch_object( $result );
 			if ( !$row ) {
 				break;
 			}
-			echo "<tr>";
-			echo '<td>' . $row->wiki. '</td>';
-			echo '<td>' . formatItem( $row->item ) . '</td>';
-			echo '<td>' . formatPage( $row->wiki, $row->page, $wd ) . '</td>';
-			echo '<td>' . $row->status . '</td>';
-			echo '<td>' . $row->stamp . '</td>';
-			echo '<td>' . formatUser( $row->author ) . '</td>';
-			echo "</tr>\n";
+			if ( !$first ) {
+				$first = $row;
+			}
+			$table .= "<tr>";
+			$table .= '<td>' . $row->wiki. '</td>';
+			$table .= '<td>' . formatItem( $row->item ) . '</td>';
+			$table .= '<td>' . formatPage( $row->wiki, $row->page, $wd ) . '</td>';
+			$table .= '<td>' . $row->status . '</td>';
+			$table .= '<td>' . $row->stamp . '</td>';
+			$table .= '<td>' . formatUser( $row->author ) . '</td>';
+			$table .= "</tr>\n";
+			$last = $row;
+		}
+
+		$links = [];
+
+		$data = compact( 'view', 'wiki', 'status', 'order', 'limit' );
+		if ( $from ) {
+			$query = $data;
+			$query['from'] = $first ? $first->id : '';
+			$query['dir'] = 'prev';
+			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?'
+			$link .= http_build_query( $query ) . '">&larr; prev</a>';
+			$links[] = $link;
 		}
 
 		$next = mysql_fetch_object( $result );
-		if ( $next ) {
-			// TODO
+		if ( $next || $dir === 'prev' ) {
+			$query = $data;
+			$query['from'] = $next ? $next->id : ( $last ? ( $last->id + 1 ) : '' );
+			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?'
+			$link .= http_build_query( $query ) . '">next &rarr;</a>';
+			$links[] = $link;
 		}
 
-		echo "</table>\n";
+		$table .= "</table>\n";
+
+		echo implode( '&nbsp;', $links ) . "\n";
+		echo $table;
+		echo implode( '&nbsp;', $links ) . "\n";
 
 	}
 
