@@ -6,7 +6,7 @@ ini_set( 'default_charset', 'utf-8' );
 //error_reporting( E_ALL );
 
 function get_value( $value, $fallback = '' ) {
-	return isset( $_GET[$value] ) ? $_GET[$value] : $fallback;
+	return !empty( $_GET[$value] ) ? $_GET[$value] : $fallback;
 }
 
 function getDBs() {
@@ -29,14 +29,14 @@ function formatPage( $wiki, $page, $db ) {
 		$result = mysql_query( $query, $db );
 		$row = mysql_fetch_object( $result );
 		$data = unserialize( $row->site_data );
-		$cache[$wiki] = $data['page_path'];
+		$cache[$wiki] = $data['paths']['page_path'];
 	}
-	$url = str_replace( '$1', urlencode( $page ), $cache[$wiki] );
+	$url = str_replace( '$1', rawurlencode( $page ), $cache[$wiki] );
 	return "<a href=\"$url\">" . htmlspecialchars( $page, ENT_NOQUOTES, 'UTF-8' ) . '</a>';
 }
 
 function formatUser( $user ) {
-	$url_user = urlencode( $user );
+	$url_user = rawurlencode( $user );
 	$text_user = htmlspecialchars( $user, ENT_NOQUOTES, 'UTF-8' );
 	return "<a href=\"//www.wikidata.org/wiki/User:$url_user\">$text_user</a>";
 }
@@ -47,7 +47,8 @@ function formatItem( $item ) {
 
 $wiki = get_value( 'wiki' );
 $key = 'id'; //get_value( 'key', 'id' );
-$order = get_value( 'desc' ) ? 'DESC' : 'ASC';
+$status = get_value( 'status', [] );
+$order = get_value( 'order', 'ASC' ) === 'DESC' ? 'DESC' : 'ASC';
 $limit = get_value( 'limit', 50 );
 
 ?>
@@ -71,13 +72,55 @@ $limit = get_value( 'limit', 50 );
 
 <input type="hidden" name="view" value="1">
 
-<p>Wiki: <input type="text" name="wiki" value="<?php echo $wiki; ?>"></p>
+<p><label for="wiki">Wiki:</label> <input type="text" id="wiki" name="wiki" value="<?php echo $wiki; ?>"></p>
 
-<!--p>Sort by:</p-->
+<p>I want to see:</p>
 
-<p>Limit: <input type="text" name="limit" list="limit" value="<?php echo $limit; ?>"></p>
+<p>
+<?php
 
-<datalist id="limit">
+$status_map = [
+	'READY' => 'articles',
+	'REDIRECT' => 'redirects',
+	'DELETED' => 'deleted pages',
+	'FALSE' => 'false positives',
+];
+
+foreach ( $status_map as $key => $value ) {
+	
+	echo "<label for=\"$key\">$value</label>&nbsp;"
+	echo "<input type=\"checkbox\" name=\"status[]\" id=\"$key\" value=\"$key\"";
+	echo ( !$status || in_array( $key, $status ) ) ? ' checked="checked"' : '';
+	echo ">&nbsp;\n";
+
+}
+
+?>
+</p>
+
+<p>Order:
+<?php
+
+$order_map = [
+	'ASC' => 'ascending',
+	'DESC' => 'descending',
+];
+
+foreach ( $order_map as $key => $value ) {
+
+	echo "<label for=\"$key\">$value</label>&nbsp;";
+	echo "<input type=\"radio\" name=\"order\" id=\"$key\" value=\"$key\"";
+	echo $key === $order ? ' checked="checked"' : '';
+	echo ">&nbsp;\n";
+
+}
+
+?>
+</p>
+
+<p><label for="limit">Limit:</label> <input type="text" id="limit" name="limit" list="limits" value="<?php echo $limit; ?>"></p>
+
+<datalist id="limits">
     <option value="20">
     <option value="50">
     <option value="100">
@@ -98,6 +141,12 @@ if ( get_value( 'view' ) ) {
 	$conds = [];
 	if ( $wiki ) {
 		$conds[] = sprintf( "wiki = '%s'", mysql_real_escape_string( $wiki, $db ) );
+	}
+	if ( $status ) {
+		$callback = function ( $value ) use ( $db ) {
+			return '"' . mysql_real_escape_string( $value, $db ) . '"';
+		}
+		$conds[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
 	}
 	if ( $conds ) {
 		$query .= ' WHERE ' . implode( 'AND', $conds );
