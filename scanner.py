@@ -16,16 +16,8 @@ class ReportingBot(WikidataBot):
 
     disambig_item = 'Q4167410'
     skip = {
-        'brwiki',
-        'enwiki',
-        'hakwiki',
-        'igwiki',
-        'mkwiki',
-        'mznwiki',
         'simplewikibooks',  # T180404
         'simplewikiquote',  # T180404
-        'specieswiki',
-        'towiki',
     }
     use_from_page = False
 
@@ -105,7 +97,8 @@ class WikiUpdatingBot(ReportingBot):
     def setup(self):
         super(WikiUpdatingBot, self).setup()
         with self.db.cursor() as cur:
-            cur.execute('SELECT item WHERE wiki = %s', (self.wiki,))
+            cur.execute('SELECT item FROM disambiguations WHERE wiki = %s',
+                        (self.wiki,))
             data = cur.fetchall()
         self._generator = (pywikibot.ItemPage(self.repo, item)
                            for (item,) in data)

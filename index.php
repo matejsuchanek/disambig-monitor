@@ -149,7 +149,9 @@ if ( get_value( 'view' ) ) {
 		$where[] = 'status IN ( ' . implode( ', ', array_map( $callback, $status ) ) . ' )';
 	}
 	if ( $from ) {
-		$op = $dir === 'prev' ? '>' : '<=';
+		// FIXME
+		//$op = $dir === 'prev' ? '>' : '<=';
+		$op = $order === 'DESC' ? '<=' : '>=';
 		$where[] = sprintf( "id $op '%d'", $from );
 	}
 	if ( $where ) {
@@ -191,7 +193,7 @@ if ( get_value( 'view' ) ) {
 
 		$data = compact( 'wiki', 'status', 'order', 'limit' );
 		$data['view'] = 1;
-		/*
+		/* FIXME
 		if ( $from ) {
 			$query = $data;
 			$query['from'] = $first ? $first->id : '';
@@ -199,8 +201,8 @@ if ( get_value( 'view' ) ) {
 			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?';
 			$link .= http_build_query( $query ) . '">&larr; prev</a>';
 			$links[] = $link;
-		}*/
-
+		}
+		*/
 		$next = mysql_fetch_object( $result );
 		if ( $next || $dir === 'prev' ) {
 			$query = $data;
