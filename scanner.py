@@ -5,9 +5,6 @@ import os
 import pymysql
 import pywikibot
 
-from queue import Queue
-from threading import Lock, Thread
-
 from pywikibot.bot import WikidataBot
 from pywikibot.pagegenerators import (
     GeneratorFactory,
@@ -33,9 +30,6 @@ class ReportingBot(WikidataBot):
     use_from_page = False
 
     def __init__(self, db, generator, **kwargs):
-        self.availableOptions.update({
-            'threads': 3,
-        })
         super(ReportingBot, self).__init__(**kwargs)
         self.db = db
         self._generator = generator
@@ -44,39 +38,11 @@ class ReportingBot(WikidataBot):
     def generator(self):
         return PreloadingEntityGenerator(self._generator)
 
-    def setup(self):
-        super(ReportingBot, self).setup()
-        count = self.getOption('threads')
-        self.queue = Queue(count)
-        self.workers = []
-        for i in range(count):
-            thread = Thread(target=self.work)
-            thread.start()
-            self.workers.append(thread)
-
-    def work(self):
-        while True:
-            page, item = self.queue.get()
-            if item is None:
-                break
-            self.process_page(page, item)
-            self.queue.task_done()
-
     def is_disambig(self, item):
         for claim in item.claims.get('P31', []):
             if claim.target_equals(self.disambig_item):
                 return True
         return False
-
-    def treat_page_and_item(self, page, item):
-        if not self.is_disambig(item):
-            return
-        for dbname in item.sitelinks:
-            if dbname in self.skip:
-                continue
-            apisite = pywikibot.site.APISite.fromDBName(dbname)
-            page = pywikibot.Page(apisite, item.sitelinks[dbname])
-            self.queue.put((page, item))
 
     def process_page(self, page, item):
         with self.db.cursor(pymysql.cursors.DictCursor) as cur:
@@ -116,19 +82,53 @@ class ReportingBot(WikidataBot):
         if ok:
             self.db.commit()
 
-    def teardown(self):
-        count = len(self.workers)
-        for i in range(count):
-            self.queue.put((None, None))
-        for worker in self.workers:
-            worker.join()
-        super(ReportingBot, self).teardown()
+
+class GeneratorBot(ReportingBot):
+
+    def treat_page_and_item(self, page, item):
+        if not self.is_disambig(item):
+            return
+        for dbname in item.sitelinks:
+            if dbname in self.skip:
+                continue
+            site = pywikibot.site.APISite.fromDBName(dbname)
+            page = pywikibot.Page(site, item.sitelinks[dbname])
+            self.process_page(page, item)
+
+
+class WikiUpdatingBot(ReportingBot):
+
+    def __init__(self, db, wiki, **kwargs):
+        super(WikiUpdatingBot, self).__init__(db, **kwargs)
+        self.wiki = wiki
+
+    def setup(self):
+        super(WikiUpdatingBot, self).setup()
+        with self.db.cursor() as cur:
+            cur.execute('SELECT item WHERE wiki = %s', (self.wiki,))
+            data = cur.fetchall()
+        self._generator = (pywikibot.ItemPage(self.repo, item)
+                           for (item,) in data)
+
+    def treat_page_and_item(self, page, item):
+        link = item.sitelinks.get(self.wiki)
+        if not link or not self.is_disambig(item):
+            with self.db.cursor() as cur:
+                cur.execute('DELETE FROM disambiguations WHERE wiki = %s '
+                            'AND item = %s', (self.wiki, item.getID()))
+                self.db.commit()
+            return
+
+        site = pywikibot.site.APISite.fromDBName(self.wiki)
+        page = pywikibot.Page(site, link)
+        self.process_page(page, item)
 
 
 def main(*args):
     options = {}
     local_args = pywikibot.handle_args(args)
     genFactory = GeneratorFactory()
+    cls = GeneratorBot
     for arg in local_args:
         if genFactory.handleArg(arg):
             continue
@@ -138,6 +138,9 @@ def main(*args):
                 options[arg[1:]] = int(value) if value.isdigit() else value
             else:
                 options[arg[1:]] = True
+        else:
+            options['wiki'] = arg
+            cls = WikiUpdatingBot
 
     db = pymysql.connect(
         database='s53728__data',
@@ -146,7 +149,7 @@ def main(*args):
         charset='utf8mb4',
     )
     generator = genFactory.getCombinedGenerator()
-    bot = ReportingBot(db, generator=generator, **options)
+    bot = cls(db, generator=generator, **options)
     bot.run()
 
 

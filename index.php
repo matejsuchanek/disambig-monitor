@@ -191,6 +191,7 @@ if ( get_value( 'view' ) ) {
 
 		$data = compact( 'wiki', 'status', 'order', 'limit' );
 		$data['view'] = 1;
+		/*
 		if ( $from ) {
 			$query = $data;
 			$query['from'] = $first ? $first->id : '';
@@ -198,7 +199,7 @@ if ( get_value( 'view' ) ) {
 			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?';
 			$link .= http_build_query( $query ) . '">&larr; prev</a>';
 			$links[] = $link;
-		}
+		}*/
 
 		$next = mysql_fetch_object( $result );
 		if ( $next || $dir === 'prev' ) {
