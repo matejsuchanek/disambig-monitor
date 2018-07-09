@@ -28,7 +28,7 @@ class ReportingBot(WikidataBot):
 
     @property
     def generator(self):
-        return PreloadingEntityGenerator(self._generator)
+        return PreloadingEntityGenerator(self._generator, site=self.repo)
 
     def is_disambig(self, item):
         for claim in item.claims.get('P31', []):
@@ -77,9 +77,21 @@ class ReportingBot(WikidataBot):
 
 class GeneratorBot(ReportingBot):
 
+    def skip_page(self, item):
+        return item.isRedirectPage() or not self.is_disambig(item) or (
+            super(GeneratorBot, self).skip_page(item))
+
     def treat_page_and_item(self, page, item):
-        if not self.is_disambig(item):
-            return
+        with self.db.cursor() as cur:
+            cur.execute('SELECT wiki, id FROM disambiguations WHERE item = %s',
+                        (item.getID(),))
+            data = dict(cur.fetchall())
+        remove = set(item.sitelinks) - set(data)
+        if remove:
+            with self.db.cursor() as cur:
+                cur.execute('DELETE FROM disambiguations WHERE id IN (%s)'
+                            % ','.join(data[wiki] for wiki in remove))
+            self.db.commit()
         for dbname in item.sitelinks:
             if dbname in self.skip:
                 continue
@@ -109,7 +121,7 @@ class WikiUpdatingBot(ReportingBot):
             with self.db.cursor() as cur:
                 cur.execute('DELETE FROM disambiguations WHERE wiki = %s '
                             'AND item = %s', (self.wiki, item.getID()))
-                self.db.commit()
+            self.db.commit()
             return
 
         site = pywikibot.site.APISite.fromDBName(self.wiki)

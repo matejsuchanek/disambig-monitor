@@ -74,7 +74,10 @@ $limit = get_value( 'limit', 50 );
 
 <input type="hidden" name="view" value="1">
 
-<p><label for="wiki">Wiki:</label> <input type="text" id="wiki" name="wiki" value="<?php echo $wiki; ?>"></p>
+<p>
+<label for="wiki">Wiki (can be LIKE pattern):</label>
+<input type="text" id="wiki" name="wiki" value="<?php echo htmlspecialchars( $wiki ); ?>">
+</p>
 
 <p>I want to see:</p>
 
@@ -118,7 +121,10 @@ foreach ( $order_map as $key => $value ) {
 ?>
 </p>
 
-<p><label for="limit">Limit:</label> <input type="text" id="limit" name="limit" list="limits" value="<?php echo $limit; ?>"></p>
+<p>
+<label for="limit">Limit:</label>
+<input type="text" id="limit" name="limit" list="limits" value="<?php echo $limit; ?>">
+</p>
 
 <datalist id="limits">
     <option value="20">
@@ -140,7 +146,7 @@ if ( get_value( 'view' ) ) {
 	$query = 'SELECT * FROM disambiguations';
 	$where = [];
 	if ( $wiki ) {
-		$where[] = sprintf( "wiki = '%s'", mysql_real_escape_string( $wiki, $db ) );
+		$where[] = sprintf( "wiki LIKE '%s'", mysql_real_escape_string( $wiki, $db ) );
 	}
 	if ( $status ) {
 		$callback = function ( $value ) use ( $db ) {
@@ -179,7 +185,7 @@ if ( get_value( 'view' ) ) {
 				$first = $row;
 			}
 			$table .= "<tr>";
-			$table .= '<td>' . $row->wiki. '</td>';
+			$table .= '<td>' . $row->wiki . '</td>';
 			$table .= '<td>' . formatItem( $row->item ) . '</td>';
 			$table .= '<td>' . formatPage( $row->wiki, $row->page, $wd ) . '</td>';
 			$table .= '<td>' . $row->status . '</td>';
@@ -204,7 +210,8 @@ if ( get_value( 'view' ) ) {
 		}
 		*/
 		$next = mysql_fetch_object( $result );
-		if ( $next || $dir === 'prev' ) {
+		//if ( $next || $dir === 'prev' ) {
+		if ( $next ) {
 			$query = $data;
 			$query['from'] = $next ? $next->id : ( $last ? ( $last->id + 1 ) : '' );
 			$link = '<a href="' . $_SERVER['PHP_SELF'] . '?';
