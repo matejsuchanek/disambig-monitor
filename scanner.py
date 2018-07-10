@@ -19,7 +19,7 @@ class ReportingBot(WikidataBot):
         'simplewikibooks',  # T180404
         'simplewikiquote',  # T180404
     }
-    use_from_page = False
+    use_from_page = None
 
     def __init__(self, db, generator, **kwargs):
         super(ReportingBot, self).__init__(**kwargs)
@@ -28,7 +28,7 @@ class ReportingBot(WikidataBot):
 
     @property
     def generator(self):
-        return PreloadingEntityGenerator(self._generator, site=self.repo)
+        return PreloadingEntityGenerator(self._generator)
 
     def is_disambig(self, item):
         for claim in item.claims.get('P31', []):
@@ -77,21 +77,26 @@ class ReportingBot(WikidataBot):
 
 class GeneratorBot(ReportingBot):
 
-    def skip_page(self, item):
-        return item.isRedirectPage() or not self.is_disambig(item) or (
-            super(GeneratorBot, self).skip_page(item))
-
     def treat_page_and_item(self, page, item):
         with self.db.cursor() as cur:
             cur.execute('SELECT wiki, id FROM disambiguations WHERE item = %s',
                         (item.getID(),))
             data = dict(cur.fetchall())
-        remove = set(item.sitelinks) - set(data)
+        if item.isRedirectPage() or not self.is_disambig(item):
+            if data:
+                with self.db.cursor() as cur:
+                    cur.execute('DELETE FROM disambiguations WHERE item = %s',
+                                (item.getID(),))
+                self.db.commit()
+            return
+
+        remove = set(data) - set(item.sitelinks)
         if remove:
             with self.db.cursor() as cur:
                 cur.execute('DELETE FROM disambiguations WHERE id IN (%s)'
-                            % ','.join(data[wiki] for wiki in remove))
+                            % ','.join(str(data[wiki]) for wiki in remove))
             self.db.commit()
+
         for dbname in item.sitelinks:
             if dbname in self.skip:
                 continue
@@ -132,7 +137,8 @@ class WikiUpdatingBot(ReportingBot):
 def main(*args):
     options = {}
     local_args = pywikibot.handle_args(args)
-    genFactory = GeneratorFactory()
+    site = pywikibot.Site()
+    genFactory = GeneratorFactory(site=site)
     cls = GeneratorBot
     for arg in local_args:
         if genFactory.handleArg(arg):
