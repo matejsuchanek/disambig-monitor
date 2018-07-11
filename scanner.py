@@ -105,33 +105,63 @@ class GeneratorBot(ReportingBot):
             self.process_page(page, item)
 
 
-class WikiUpdatingBot(ReportingBot):
-
-    def __init__(self, db, wiki, **kwargs):
-        super(WikiUpdatingBot, self).__init__(db, **kwargs)
-        self.wiki = wiki
+class DatabaseUpdatingBot(ReportingBot):
 
     def setup(self):
-        super(WikiUpdatingBot, self).setup()
-        with self.db.cursor() as cur:
-            cur.execute('SELECT item FROM disambiguations WHERE wiki = %s',
-                        (self.wiki,))
-            data = cur.fetchall()
-        self._generator = (pywikibot.ItemPage(self.repo, item)
-                           for (item,) in data)
+        super(DatabaseUpdatingBot, self).setup()
+        self._generator = self.generate_items()
 
-    def treat_page_and_item(self, page, item):
-        link = item.sitelinks.get(self.wiki)
+    def generate_items(self, wiki=None):
+        last_id = 0
+        while True:
+            query = 'SELECT id, item FROM disambiguations WHERE'
+            args = []
+            if wiki:
+                query += ' wiki = %s AND'
+                args.append(wiki)
+            query = ' id > %d ORDER BY id LIMIT 100'
+            args.append(last_id)
+            with self.db.cursor() as cur:
+                cur.execute(query, args)
+            data = cur.fetchall()
+            buffer = set()
+            for id_, item in data:
+                buffer.add(pywikibot.ItemPage(self.repo, item))
+                last_id = id_
+            if not buffer:
+                break
+            for item in buffer:
+                yield item
+
+    def process_link(self, item, wiki):
+        link = item.sitelinks.get(wiki)
         if not link or not self.is_disambig(item):
             with self.db.cursor() as cur:
                 cur.execute('DELETE FROM disambiguations WHERE wiki = %s '
-                            'AND item = %s', (self.wiki, item.getID()))
+                            'AND item = %s', (wiki, item.getID()))
             self.db.commit()
             return
 
-        site = pywikibot.site.APISite.fromDBName(self.wiki)
+        site = pywikibot.site.APISite.fromDBName(wiki)
         page = pywikibot.Page(site, link)
         self.process_page(page, item)
+
+    def treat_page_and_item(self, page, item):
+        for wiki in item.sitelinks:
+            self.process_link(item, wiki)
+
+
+class SingleWikiUpdatingBot(DatabaseUpdatingBot):
+
+    def __init__(self, db, wiki, **kwargs):
+        super(SingleWikiUpdatingBot, self).__init__(db, **kwargs)
+        self.wiki = wiki
+
+    def generate_items(self):
+        return self.generate_items(self.wiki)
+
+    def treat_page_and_item(self, page, item):
+        self.process_item(item, self.wiki)
 
 
 def main(*args):
@@ -139,7 +169,6 @@ def main(*args):
     local_args = pywikibot.handle_args(args)
     site = pywikibot.Site()
     genFactory = GeneratorFactory(site=site)
-    cls = GeneratorBot
     for arg in local_args:
         if genFactory.handleArg(arg):
             continue
@@ -151,7 +180,6 @@ def main(*args):
                 options[arg[1:]] = True
         else:
             options['wiki'] = arg
-            cls = WikiUpdatingBot
 
     db = pymysql.connect(
         database='s53728__data',
@@ -160,6 +188,12 @@ def main(*args):
         charset='utf8mb4',
     )
     generator = genFactory.getCombinedGenerator()
+    if generator:
+        cls = GeneratorBot
+    elif options.get('wiki'):
+        cls = SingleWikiUpdatingBot
+    else:
+        cls = DatabaseUpdatingBot
     bot = cls(db, generator=generator, **options)
     bot.run()
 
