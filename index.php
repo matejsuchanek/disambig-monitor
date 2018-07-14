@@ -70,6 +70,8 @@ $limit = get_value( 'limit', 50 );
 
 <p>Use the following form to get a list of problematic links to Wikidata disambiguation items.</p>
 
+<p>Removed links should disappear within the next two hours. For fixed pages, this may take a week.</p>
+
 <form action="index.php" method="get">
 
 <input type="hidden" name="view" value="1">

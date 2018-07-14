@@ -9,6 +9,5 @@ CREATE TABLE disambiguations (
 	PRIMARY KEY (id)
 );
 
-CREATE INDEX wiki ON disambiguations (wiki);
+CREATE UNIQUE INDEX wiki_item ON disambiguations (wiki, item);
 --CREATE UNIQUE INDEX wiki_page ON disambiguations (wiki, page);
---CREATE UNIQUE INDEX wiki_item ON disambiguations (item, wiki);
