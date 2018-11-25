@@ -119,7 +119,7 @@ class DatabaseUpdatingBot(ReportingBot):
             if wiki:
                 query += ' wiki = %s AND'
                 args.append(wiki)
-            query = ' id > %d ORDER BY id LIMIT 100'
+            query += ' id > %d ORDER BY id LIMIT 100'
             args.append(last_id)
             with self.db.cursor() as cur:
                 cur.execute(query, args)
@@ -127,7 +127,7 @@ class DatabaseUpdatingBot(ReportingBot):
             buffer = set()
             for id_, item in data:
                 buffer.add(pywikibot.ItemPage(self.repo, item))
-                last_id = id_
+                last_id = int(id_)
             if not buffer:
                 break
             for item in buffer:
@@ -148,7 +148,8 @@ class DatabaseUpdatingBot(ReportingBot):
 
     def treat_page_and_item(self, page, item):
         for wiki in item.sitelinks:
-            self.process_link(item, wiki)
+            if wiki not in self.skip:
+                self.process_link(item, wiki)
 
 
 class SingleWikiUpdatingBot(DatabaseUpdatingBot):
