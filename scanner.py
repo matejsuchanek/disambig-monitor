@@ -38,8 +38,8 @@ class ReportingBot(WikidataBot):
 
     def process_page(self, page, item):
         with self.db.cursor(pymysql.cursors.DictCursor) as cur:
-            cur.execute('SELECT id, page, stamp, status '
-                        'FROM disambiguations WHERE item = %s AND wiki = %s',
+            cur.execute('SELECT id, page, status FROM disambiguations '
+                        'WHERE item = %s AND wiki = %s',
                         (item.getID(), page.site.dbName()))
             data = cur.fetchone()
 
@@ -97,12 +97,10 @@ class GeneratorBot(ReportingBot):
                             % ','.join(str(data[wiki]) for wiki in remove))
             self.db.commit()
 
-        for dbname in item.sitelinks:
-            if dbname in self.skip:
-                continue
-            site = pywikibot.site.APISite.fromDBName(dbname)
-            page = pywikibot.Page(site, item.sitelinks[dbname])
-            self.process_page(page, item)
+        for dbname, link in item.sitelinks.items():
+            if dbname not in self.skip:
+                page = pywikibot.Page(link)
+                self.process_page(page, item)
 
 
 class DatabaseUpdatingBot(ReportingBot):
@@ -119,7 +117,7 @@ class DatabaseUpdatingBot(ReportingBot):
             if wiki:
                 query += ' wiki = %s AND'
                 args.append(wiki)
-            query += ' id > %d ORDER BY id LIMIT 100'
+            query += ' id > %s ORDER BY id LIMIT 100'
             args.append(last_id)
             with self.db.cursor() as cur:
                 cur.execute(query, args)
@@ -135,21 +133,32 @@ class DatabaseUpdatingBot(ReportingBot):
 
     def process_link(self, item, wiki):
         link = item.sitelinks.get(wiki)
-        if not link or not self.is_disambig(item):
+        if not link:
             with self.db.cursor() as cur:
                 cur.execute('DELETE FROM disambiguations WHERE wiki = %s '
                             'AND item = %s', (wiki, item.getID()))
             self.db.commit()
             return
 
-        site = pywikibot.site.APISite.fromDBName(wiki)
-        page = pywikibot.Page(site, link)
+        page = pywikibot.Page(link)
         self.process_page(page, item)
 
+    def prerequisite(self, item):
+        is_valid = (item.exists() and not item.isRedirectPage()
+                    and self.is_disambig(item))
+        if not is_valid:
+            with self.db.cursor() as cur:
+                cur.execute('DELETE FROM disambiguations WHERE item = %s',
+                            (item.getID(),))
+            self.db.commit()
+
+        return is_valid
+
     def treat_page_and_item(self, page, item):
-        for wiki in item.sitelinks:
-            if wiki not in self.skip:
-                self.process_link(item, wiki)
+        if self.prerequisite(item):
+            for wiki in item.sitelinks:
+                if wiki not in self.skip:
+                    self.process_link(item, wiki)
 
 
 class SingleWikiUpdatingBot(DatabaseUpdatingBot):
@@ -162,7 +171,8 @@ class SingleWikiUpdatingBot(DatabaseUpdatingBot):
         return self.generate_items(self.wiki)
 
     def treat_page_and_item(self, page, item):
-        self.process_item(item, self.wiki)
+        if self.prerequisite(item):
+            self.process_item(item, self.wiki)
 
 
 def main(*args):
